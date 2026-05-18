@@ -46,6 +46,8 @@ The skill defines a **6-step defensive protocol** the agent follows when about t
 | Social engineering | False urgency, role inversion, fabricated jurisprudence, false "consolidated facts" |
 | Rare vectors | Unicode tag chars (U+E0000–U+E007F), homoglyphs, font substitution, JBIG2 stego |
 
+Full pattern catalogue: [`defesa-prompt-injection/padroes.md`](defesa-prompt-injection/padroes.md).
+
 Bilingual coverage: **English + Portuguese** (Brazilian legal vocabulary).
 
 ## Installation
@@ -97,12 +99,14 @@ Good chaining examples:
 
 ## Optional: Python detector script
 
-The repository also ships [`scripts/detector.py`](scripts/detector.py) — a standalone Python utility that applies the pattern checklist programmatically to a PDF file and emits a structured report. Useful as a pre-filter or in CI pipelines.
+The repository also ships [`defesa-prompt-injection/scripts/detector.py`](defesa-prompt-injection/scripts/detector.py) — a standalone Python utility that applies the pattern checklist programmatically to a PDF file and emits a structured report. Useful as a pre-filter or in CI pipelines.
 
 ```bash
 pip install pdfplumber pypdf pikepdf
-python scripts/detector.py path/to/suspicious.pdf
+python defesa-prompt-injection/scripts/detector.py path/to/suspicious.pdf
 ```
+
+A worked example is available at [`defesa-prompt-injection/examples/example-adversarial-pdf.md`](defesa-prompt-injection/examples/example-adversarial-pdf.md).
 
 ## Limitations
 
@@ -118,8 +122,8 @@ For these cases, **the final filter is always human review**. Use this skill to 
 New attack vectors are discovered regularly. Contributions are welcome:
 
 1. Open an issue describing the vector with a minimal reproducible example
-2. Submit a PR adding the pattern to [padroes.md](padroes.md)
-3. If the vector is detectable programmatically, add corresponding logic to [`scripts/detector.py`](scripts/detector.py)
+2. Submit a PR adding the pattern to [`defesa-prompt-injection/padroes.md`](defesa-prompt-injection/padroes.md)
+3. If the vector is detectable programmatically, add corresponding logic to [`defesa-prompt-injection/scripts/detector.py`](defesa-prompt-injection/scripts/detector.py)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 

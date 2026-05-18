@@ -17,8 +17,8 @@ If you discover a prompt injection pattern not yet covered:
 ### Submit a pattern PR
 
 1. Fork the repo
-2. Add the pattern to the appropriate section in [`padroes.md`](padroes.md)
-3. If the vector can be detected programmatically, extend [`scripts/detector.py`](scripts/detector.py) with corresponding logic and a docstring referencing the issue
+2. Add the pattern to the appropriate section in [`defesa-prompt-injection/padroes.md`](defesa-prompt-injection/padroes.md)
+3. If the vector can be detected programmatically, extend [`defesa-prompt-injection/scripts/detector.py`](defesa-prompt-injection/scripts/detector.py) with corresponding logic and a docstring referencing the issue
 4. Update [`CHANGELOG.md`](CHANGELOG.md) under the `## [Unreleased]` section
 5. Open a PR with a clear title and reference the issue
 
