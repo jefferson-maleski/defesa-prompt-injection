@@ -14,7 +14,7 @@
         "name": "Jefferson Maleski"
       },
       "license": "Apache-2.0",
-      "source": "./defesa-prompt-injection"
+      "source": "./skills/defesa-prompt-injection"
     }
   ]
 }
