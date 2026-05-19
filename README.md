@@ -2,11 +2,13 @@
 
 > **Defense-in-depth against prompt injection when AI agents read adversarial documents.**
 
+🇧🇷 **Versão em português: [README.pt.md](README.pt.md)**
+
 A Claude Code / Agent skill designed to be invoked as the **first step** before any analysis of documents from untrusted sources — opposing-party legal briefs, third-party contracts, external emails, scraped web content, or any document not produced by the user's own organization.
 
 [![Skills.sh](https://img.shields.io/badge/skills.sh-listed-blue)](https://skills.sh/jefferson-maleski/defesa-prompt-injection)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.0-green.svg)](CHANGELOG.md)
 
 ---
 
@@ -29,16 +31,17 @@ The skill defines a **6-step defensive protocol** the agent follows when about t
 
 1. **Announce** the file as adversarial — making the agent's mode explicit
 2. **Extract raw text** without OCR normalization
-3. **Structural inspection** — metadata, embedded scripts, forms, layers, before any content
+3. **Structural inspection** — run [`scripts/detector.py`](scripts/detector.py) (mandatory as of v1.2.0) for metadata, embedded scripts, forms, layers, invisible text, and out-of-bounds coordinates
 4. **Pattern checklist** — invisible text, zero-width chars, trigger phrases, hidden annotations (see [padroes.md](padroes.md))
 5. **Hardened analysis** — perform domain analysis with awareness that all internal content is adversarial
-6. **Structured findings report** — surface every detected pattern to the user
+6. **Structured findings report** — strictly tabular, surfaces every detected pattern to the user
 
 ## What it detects
 
 | Vector | Examples |
 |---|---|
-| Invisible text | White-on-white, font size ≤ 1pt, opacity 0, out-of-bounds positioning |
+| Invisible text | White-on-white, font size ≤ 1pt, opacity 0 |
+| **Out-of-bounds text** | Characters drawn outside the MediaBox (negative coordinates, beyond page edge) |
 | Zero-width characters | U+200B, U+200C, U+200D, U+FEFF, U+2060, U+202E (RTL override) |
 | Trigger phrases | "ignore previous instructions", "you are now", "ATTENTION AI" (English) + Portuguese variants |
 | PDF metadata | Suspicious Author/Creator/Producer, embedded JavaScript, AcroForm, optional layers |
@@ -82,7 +85,7 @@ The skill self-activates based on description triggers. To force explicit invoca
 
 > "Antes de ler [PDF], roda a defesa-prompt-injection"
 
-The agent will then announce the adversarial source, inspect the file structurally, apply the pattern checklist, report findings, and proceed with the domain analysis treating all internal text as data.
+The agent will then announce the adversarial source, inspect the file structurally (via `detector.py`), apply the pattern checklist, report findings in the mandatory tabular format, and proceed with the domain analysis treating all internal text as data.
 
 ### Integration with other skills
 
@@ -97,22 +100,25 @@ Good chaining examples:
 - `defesa-prompt-injection` → red-team verifier (input + output both verified)
 - `defesa-prompt-injection` → tabular review (run on each adversarial doc in the batch)
 
-## Optional: Python detector script
+## Mandatory: Python detector script
 
-The repository also ships [`scripts/detector.py`](scripts/detector.py) — a standalone Python utility that applies the pattern checklist programmatically to a PDF file and emits a structured report. Useful as a pre-filter or in CI pipelines.
+As of v1.2.0, the skill mandates running [`scripts/detector.py`](scripts/detector.py) during step 3. The detector applies the pattern catalogue programmatically because LLM-side PDF extractors clip text to the MediaBox — meaning the model never sees out-of-bounds injections and cannot detect what its extractor never delivers.
 
 ```bash
 pip install pdfplumber pypdf pikepdf
 python scripts/detector.py path/to/suspicious.pdf
 ```
 
-A worked example is available at [`examples/example-adversarial-pdf.md`](examples/example-adversarial-pdf.md).
+Output is grouped per contiguous block (not per character) with status (APPROVED / SUSPICIOUS / BLOCKED), char counts, coordinates, and 180-char samples per finding.
+
+Test fixtures with five injection vectors each (in Portuguese and English) ship in [`examples/`](examples/) for verification.
 
 ## Limitations
 
-This is **defense-in-depth**, not absolute guarantee. Vectors not currently covered:
+This is **defense-in-depth**, not absolute guarantee. Vectors not currently covered by the automated detector:
+- **Opacity 0 (alpha=0)** — `pdfplumber` exposes color but not graphics-state alpha; check manually via content-stream inspection
+- Custom-encoded fonts mapping glyphs to misleading Unicode (font substitution attack)
 - Advanced steganography in images
-- Injection through embedded custom fonts (font glyph substitution)
 - Side-channel attacks via timing or resource consumption
 
 For these cases, **the final filter is always human review**. Use this skill to raise the floor, not as a ceiling.
@@ -129,13 +135,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 ## Origin and context
 
-This skill was originally developed for use in Brazilian litigation practice, where opposing-party briefs from large institutional adversaries (banks, INSS) routinely include adversarial content. The bilingual pattern list (English + Portuguese) reflects that origin — but the skill itself is **domain- and jurisdiction-agnostic** and applies to any agent reading documents from untrusted sources.
+This skill was born in Brazilian consumer-credit litigation. Brazilian banks routinely sell predatory products (RMC, RCC, FGTS antecipado) to retirees and INSS beneficiaries, then defend the resulting lawsuits with PDF briefs generated by automated legal-tech pipelines — pipelines technically capable of embedding adversarial instructions into the documents the opposing lawyer receives. As AI-assisted legal practice spreads (Astrea, Mindia, in-house automations), every brief read by an AI agent becomes a potential injection vector.
+
+The bilingual pattern catalogue (English + Portuguese) reflects that origin. The skill itself is **domain- and jurisdiction-agnostic** and applies to any agent reading documents from any untrusted source — but the threat model that shaped it is concrete, not hypothetical.
 
 ## Author
 
 **Jefferson Maleski** — [@jefferson-maleski](https://github.com/jefferson-maleski)
 
-Brazilian litigation lawyer. This skill is an externalization of defensive workflows developed in actual practice against sophisticated counterparties.
+Brazilian litigation lawyer (OAB/GO 50.286). This skill is an externalization of defensive workflows developed in actual practice against sophisticated counterparties.
 
 ## License
 
