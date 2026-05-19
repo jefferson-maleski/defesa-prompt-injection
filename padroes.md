@@ -26,6 +26,30 @@ with pdfplumber.open("doc.pdf") as pdf:
                 print(f"SUSPICIOUS white text on page {page.page_number}: {char['text']!r}")
 ```
 
+## 1.b Out-of-bounds text (text outside MediaBox/CropBox)
+
+A critical sub-vector of invisible text: characters drawn at coordinates **outside the page's visible area**. The text lives in the PDF content stream and is reachable by stream-level extractors, but is never rendered to screen or printer.
+
+**Why it matters defensively**:
+- Some PDF extractors (e.g., poppler `pdftotext` without `-bbox-layout`) silently clip to MediaBox — the LLM may never see this content, giving false sense of safety.
+- Other extractors (pdfplumber default, pypdf default) return the text regardless — the LLM ingests it as legitimate document content.
+- A document carrying out-of-bounds text is **always intentional concealment** — there is no benign reason to draw text at x=-800, y=-300.
+
+**Detection** (pdfplumber):
+```python
+import pdfplumber
+with pdfplumber.open("doc.pdf") as pdf:
+    for page in pdf.pages:
+        x0, y0, x1, y1 = page.bbox
+        for ch in page.chars:
+            if (ch['x1'] < x0 or ch['x0'] > x1 or
+                ch['y1'] < y0 or ch['y0'] > y1):
+                print(f"OUT-OF-BOUNDS on page {page.page_number}: "
+                      f"char {ch['text']!r} at ({ch['x0']},{ch['y0']})")
+```
+
+**Severity**: always `critical`. Out-of-bounds text is a deliberate concealment vector and must be reported regardless of the textual content.
+
 ## 2. Zero-width and invisible Unicode characters
 
 | Codepoint | Name | Risk |

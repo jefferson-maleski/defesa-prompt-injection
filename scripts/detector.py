@@ -22,10 +22,19 @@ See https://github.com/jefferson-maleski/defesa-prompt-injection
 """
 
 import argparse
+import io
 import json
 import re
 import sys
 from pathlib import Path
+
+# Force UTF-8 output on Windows (default cp1252 breaks accented chars in samples)
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True)
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True)
+    except Exception:
+        pass
 
 try:
     import pdfplumber
@@ -99,29 +108,78 @@ def check_trigger_phrases(text: str) -> list[dict]:
     return findings
 
 
-def check_invisible_text(pdf_path: Path) -> list[dict]:
-    """Find characters with suspicious size, color, or opacity."""
+def _classify_char(char: dict, page_bbox: tuple) -> str | None:
+    """Return the suspicion type for a single char, or None if it looks normal.
+
+    Priority order: out_of_bounds > white_text > tiny_font.
+    A char can match multiple criteria; we keep the most severe label.
+    """
+    cx0 = char.get("x0", 0)
+    cy0 = char.get("y0", 0)
+    cx1 = char.get("x1", 0)
+    cy1 = char.get("y1", 0)
+    px0, py0, px1, py1 = page_bbox
+    tol = 2
+    if (cx1 < px0 - tol or cx0 > px1 + tol or
+            cy1 < py0 - tol or cy0 > py1 + tol):
+        return "out_of_bounds_text"
+    color = char.get("non_stroking_color")
+    if color == (1, 1, 1) or color == 1:
+        return "white_text"
+    if char.get("size", 99) < 2:
+        return "tiny_font"
+    return None
+
+
+def _scan_chars_grouped(pdf_path: Path) -> list[dict]:
+    """Walk all chars and group consecutive ones of the same suspicion type
+    into a single finding. Emits one row per contiguous block instead of one
+    row per character.
+    """
     findings = []
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
+                page_bbox = page.bbox
+                current = None  # in-progress block
+
+                def flush():
+                    nonlocal current
+                    if current is None:
+                        return
+                    findings.append({
+                        "type": current["type"],
+                        "severity": "critical",
+                        "page": current["page"],
+                        "char_count": len(current["text"]),
+                        "sample": current["text"][:200],
+                        "first_bbox": current["first_bbox"],
+                        "last_bbox": current["last_bbox"],
+                        "size": current.get("size"),
+                    })
+                    current = None
+
                 for char in page.chars:
-                    if char.get("size", 99) < 2:
-                        findings.append({
-                            "type": "tiny_font",
-                            "severity": "critical",
+                    suspicion = _classify_char(char, page_bbox)
+                    if suspicion is None:
+                        flush()
+                        continue
+                    cbox = (char.get("x0", 0), char.get("y0", 0),
+                            char.get("x1", 0), char.get("y1", 0))
+                    if current and current["type"] == suspicion:
+                        current["text"] += char.get("text", "")
+                        current["last_bbox"] = cbox
+                    else:
+                        flush()
+                        current = {
+                            "type": suspicion,
                             "page": page.page_number,
+                            "text": char.get("text", ""),
+                            "first_bbox": cbox,
+                            "last_bbox": cbox,
                             "size": char.get("size"),
-                            "text": char.get("text"),
-                        })
-                    color = char.get("non_stroking_color")
-                    if color == (1, 1, 1) or color == 1:
-                        findings.append({
-                            "type": "white_text",
-                            "severity": "critical",
-                            "page": page.page_number,
-                            "text": char.get("text"),
-                        })
+                        }
+                flush()
     except Exception as e:
         findings.append({
             "type": "extraction_error",
@@ -129,6 +187,32 @@ def check_invisible_text(pdf_path: Path) -> list[dict]:
             "message": str(e),
         })
     return findings
+
+
+def check_invisible_text(pdf_path: Path) -> list[dict]:
+    """Find blocks of suspicious characters (tiny font, white-on-white).
+
+    Now grouped: returns one finding per contiguous block instead of one per
+    character. Out-of-bounds is handled in the same pass.
+    """
+    return [f for f in _scan_chars_grouped(pdf_path)
+            if f.get("type") in ("white_text", "tiny_font", "extraction_error")]
+
+
+def check_out_of_bounds_text(pdf_path: Path) -> list[dict]:
+    """Find text drawn outside the visible MediaBox/CropBox.
+
+    Grouped: one finding per contiguous block of out-of-bounds characters.
+
+    Vector: an adversary can draw text at negative coordinates or beyond page
+    width/height. Such text is invisible on screen and in print, but lives in
+    the PDF content stream. Some extractors clip to MediaBox during extraction
+    (meaning the LLM may never see this content) while others return it. Either
+    way, presence of out-of-bounds text is a strong signal of intentional
+    concealment.
+    """
+    return [f for f in _scan_chars_grouped(pdf_path)
+            if f.get("type") in ("out_of_bounds_text", "out_of_bounds_error")]
 
 
 def check_pdf_metadata(pdf_path: Path) -> list[dict]:
@@ -225,7 +309,9 @@ def analyze(pdf_path: Path) -> dict:
     findings = []
     findings.extend(check_invisible_chars(text))
     findings.extend(check_trigger_phrases(text))
-    findings.extend(check_invisible_text(pdf_path))
+    # Single char-level scan produces grouped findings for invisible AND
+    # out-of-bounds text — call _scan_chars_grouped once, not twice.
+    findings.extend(_scan_chars_grouped(pdf_path))
     findings.extend(check_pdf_metadata(pdf_path))
     findings.extend(check_pdf_structure(pdf_path))
 
@@ -251,7 +337,7 @@ def analyze(pdf_path: Path) -> dict:
 
 def format_human(result: dict) -> str:
     out = []
-    out.append(f"=== Anti-prompt-injection detector ===")
+    out.append("=== Anti-prompt-injection detector ===")
     out.append(f"File: {result['file']}")
     out.append(f"Status: {result['status']}")
     out.append(f"Findings: {result['findings_count']}")
@@ -266,16 +352,25 @@ def format_human(result: dict) -> str:
         items = by_severity.get(sev, [])
         if not items:
             continue
-        out.append(f"[{sev.upper()}] ({len(items)} item(s))")
+        out.append(f"[{sev.upper()}] ({len(items)} block(s))")
         for f in items:
             line = f"  - {f.get('type')}"
             if "page" in f:
                 line += f" (page {f['page']})"
             if "field" in f:
                 line += f" (field {f['field']})"
-            details = f.get("note") or f.get("match") or f.get("value") or f.get("text") or f.get("contents")
+            if "char_count" in f:
+                line += f" [{f['char_count']} chars]"
+            if "size" in f and f.get("type") == "tiny_font":
+                line += f" [size={f['size']}pt]"
+            if "first_bbox" in f:
+                fb = f["first_bbox"]
+                line += f" [at x={fb[0]:.0f}, y={fb[1]:.0f}]"
+            details = (f.get("sample") or f.get("note") or f.get("match")
+                       or f.get("value") or f.get("text") or f.get("contents"))
             if details:
-                line += f": {str(details)[:120]}"
+                sample = str(details)[:180].replace("\n", " ")
+                line += f"\n      sample: \"{sample}\""
             out.append(line)
         out.append("")
     return "\n".join(out)
