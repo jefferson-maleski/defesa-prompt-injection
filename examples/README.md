@@ -98,4 +98,4 @@ Both PDFs are regenerated with deterministic content. Adjust the constants at th
 
 ## Provenance
 
-The fixtures were derived from a real-world test of the skill itself: a Brazilian lawyer noticed that one of five injection vectors (the out-of-bounds one) was consistently missed by two independent Claude sessions, even though all five were neutralized in the final response. This led to the v1.2.0 changes: making `detector.py` mandatory, adding the out-of-bounds check, and documenting the LLM-extractor MediaBox-clipping gap. See `CHANGELOG.md` for details.
+The fixtures were derived from a real-world test of the skill: one of five injection vectors (the out-of-bounds one) was consistently missed by two independent LLM sessions, even though all five were neutralized in the final response. This led to the v1.2.0 changes — making `detector.py` mandatory, adding the out-of-bounds check, and documenting the LLM-extractor MediaBox-clipping gap. See `CHANGELOG.md` for details.

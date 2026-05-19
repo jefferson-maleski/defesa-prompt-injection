@@ -133,17 +133,13 @@ Novos vetores de ataque são descobertos regularmente. Contribuições são bem-
 
 Veja [CONTRIBUTING.md](CONTRIBUTING.md) para as diretrizes completas.
 
-## Origem e contexto
-
-Esta skill nasceu na advocacia consumerista brasileira. Bancos brasileiros vendem rotineiramente produtos predatórios (RMC, RCC, FGTS antecipado) a aposentados e beneficiários do INSS e, depois, defendem as ações resultantes com peças em PDF geradas por pipelines automatizados de legal-tech — pipelines tecnicamente capazes de embutir instruções adversariais nos documentos que o advogado adversário recebe. À medida que a advocacia assistida por IA se espalha (Astrea, Mindia, automações internas), cada peça lida por um agente de IA vira um vetor potencial de injeção.
-
-O catálogo bilíngue de padrões (inglês + português) reflete essa origem. A skill em si é **agnóstica de domínio e jurisdição**, e se aplica a qualquer agente lendo documentos de qualquer fonte não confiável — mas o modelo de ameaça que a moldou é concreto, não hipotético.
-
 ## Autor
 
 **Jefferson Maleski** — [@jefferson-maleski](https://github.com/jefferson-maleski)
 
-Advogado litigante brasileiro (OAB/GO 50.286). Esta skill é a externalização de fluxos defensivos desenvolvidos na prática real, contra contrapartes sofisticadas.
+## Construído com
+
+Desenvolvido com auxílio do [Claude](https://www.anthropic.com/claude) (Sonnet 4.6) via [Claude Code](https://www.anthropic.com/claude-code).
 
 ## Licença
 
